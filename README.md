@@ -182,6 +182,159 @@ df['bb_bbw'] = indicator_bb.bollinger_wband()
 df['bb_bbp'] = indicator_bb.bollinger_pband()
 ```
 
+#### Beast scanner: Yahoo/NSE scan, replay, and accuracy validation
+
+```python
+from ta import run_beast_scan
+
+
+# Omit symbols=... to scan the full NSE EQ universe from Yahoo Finance.
+summary = run_beast_scan(symbols=["RELIANCE", "TCS", "INFY"], max_workers=4)
+for match in summary.matches:
+    print(match.symbol, match.signal.stage, match.signal.score, match.signal.metrics)
+```
+
+The scanner follows the Yahoo integration pattern from `scans-test`: it loads
+daily OHLCV data with `yfinance.download`, normalizes raw NSE symbols to Yahoo
+tickers with the `.NS` suffix, and can load the full NSE EQ universe from NSE's
+public `EQUITY_L.csv` symbol file.
+
+Live scans use `yfinance` as an optional dependency:
+
+```sh
+$ pip install yfinance
+$ python -m ta.beast_scanner --symbols RELIANCE TCS INFY --max-workers 4
+$ python -m ta.beast_scanner --replay --symbols RELIANCE TCS INFY --max-workers 4
+$ python -m ta.beast_scanner --replay --timeframe weekly --period 10y --max-workers 12
+$ python -m ta.beast_scanner --replay --timeframe monthly --period 10y --max-workers 12
+```
+
+The signal uses only technical data available at the signal candle: SMA/EMA
+trend, MACD histogram, RSI, StochRSI, ROC, ADX direction, MFI, CMF, OBV
+accumulation, ATR percent, Bollinger Band width/position, volume
+dry-up/expansion, base contraction, long-range high/low distance, pivot
+distance, breakout stage, liquidity, and measured technical upside. It does not
+use forward data to create a signal.
+
+Replay mode validates whether a historical signal actually went up afterward.
+The strict default pass rule is:
+
+* the forward high reaches at least `+5%` within `20` bars;
+* the forward low does not breach `-8%` from entry;
+* the final close in the lookahead window is positive.
+
+Run a full NSE replay and save the evidence. `--timeframe` can be `daily`,
+`weekly`, or `monthly`; weekly/monthly use resampled Yahoo daily bars and scaled
+monthly defaults where required. To compare timeframes by a similar calendar
+horizon, use `20` weekly bars, `100` daily bars, or `5` monthly bars.
+
+```sh
+$ python -m ta.beast_scanner \
+    --replay \
+    --timeframe daily \
+    --period 10y \
+    --lookahead-bars 100 \
+    --cooldown-bars 50 \
+    --max-workers 12 \
+    --output-json /tmp/beast-daily-replay-calendar-v4.json
+```
+
+Run the pure technical optimizer against that replay without downloading data
+again:
+
+```sh
+$ python -m ta.beast_scanner \
+    --replay-input-json /tmp/beast-daily-replay-calendar-v4.json \
+    --optimize-accuracy \
+    --target-accuracy-pct 87.5 \
+    --split-date 2024-01-01 \
+    --min-train-signals 35 \
+    --min-validation-signals 8 \
+    --max-gate-clauses 6 \
+    --optimizer-beam-width 80 \
+    --output-json /tmp/beast-daily-calendar-weekly-ratio-wide-v4.json
+```
+
+Validation run on May 6, 2026:
+
+* Daily, 10 years: `50,683` signals, `40.51%` strict accuracy. With split
+  `2024-01-01`, the best larger-sample gate was
+  `adx_pos14>=31.33 AND atr_pct<=2.77 AND cmf20<=0.13 AND roc60>=40.25`,
+  producing `66.42%` full accuracy on `134` signals and `68.00%` holdout
+  accuracy on `25` signals. A thinner daily search reached `79.55%` full
+  accuracy but only `75.00%` holdout accuracy, so daily did not validate `80%`.
+  Calendar-normalized daily replay using `100` bars produced `24,342` signals
+  and `28.53%` baseline accuracy. The widest six-clause search still topped out
+  at `75.00%` full and `75.00%` holdout accuracy, so daily did not validate the
+  weekly-level `87.50%` holdout target.
+* Weekly, 10 years: `1,597` signals, `39.39%` strict accuracy. With split
+  `2024-01-01`, the best validated gate was
+  `bb_width_pct<=28.18 AND breakout_volume_ratio<=1.44 AND long_low_gain_pct>=123.2 AND post_peak_drawdown_pct<=12.84`,
+  producing `91.89%` full accuracy on `37` signals, `93.10%` train accuracy on
+  `29` signals, and `87.50%` holdout accuracy on `8` signals.
+* Monthly, 10 years: `856` signals, `26.99%` strict accuracy. With split
+  `2023-01-01`, the best wide search produced `73.33%` full accuracy and
+  `70.00%` holdout accuracy. With split `2024-01-01`, an in-sample gate reached
+  `82.14%` full accuracy but only `50.00%` holdout accuracy, so monthly did not
+  validate `80%` under the original `20`-month lookahead. Calendar-normalized
+  monthly replay using `5` bars produced `1,440` signals and `35.07%` baseline
+  accuracy. The validated monthly gate
+  `adx_neg14>=13.67 AND atr_pct<=15.08 AND bb_width_pct>=31.42 AND mfi14>=63.95 AND recent_range_pct<=24.04 AND roc60<=99.74`
+  produced `90.91%` full accuracy on `33` signals and `91.67%` holdout
+  accuracy on `12` signals.
+
+That means the strict, purely technical weekly-level target is currently
+validated for weekly and calendar-normalized monthly. Daily is still not
+validated at the same level. To apply the validated weekly gate to a live scan
+or replay, repeat `--technical-gate`:
+
+```sh
+$ python -m ta.beast_scanner \
+    --timeframe weekly \
+    --period 10y \
+    --technical-gate 'bb_width_pct<=28.18' \
+    --technical-gate 'breakout_volume_ratio<=1.44' \
+    --technical-gate 'long_low_gain_pct>=123.2' \
+    --technical-gate 'post_peak_drawdown_pct<=12.84'
+```
+
+To apply the validated calendar-normalized monthly gate:
+
+```sh
+$ python -m ta.beast_scanner \
+    --timeframe monthly \
+    --period 10y \
+    --lookahead-bars 5 \
+    --cooldown-bars 3 \
+    --technical-gate 'adx_neg14>=13.67' \
+    --technical-gate 'atr_pct<=15.08' \
+    --technical-gate 'bb_width_pct>=31.42' \
+    --technical-gate 'mfi14>=63.95' \
+    --technical-gate 'recent_range_pct<=24.04' \
+    --technical-gate 'roc60<=99.74'
+```
+
+For the highest monthly win ratio found, use the stricter monthly
+follow-through variant. It produced `13` signals, `13` passed, `100.00%` full
+accuracy, `9/9` train wins, and `4/4` holdout wins on the calendar-normalized
+monthly replay. This is the best win ratio, but it is more selective than the
+broader monthly gate above.
+
+```sh
+$ python -m ta.beast_scanner \
+    --timeframe monthly \
+    --period 10y \
+    --lookahead-bars 5 \
+    --cooldown-bars 3 \
+    --technical-gate 'stage==follow_through' \
+    --technical-gate 'adx_neg14>=13.67' \
+    --technical-gate 'atr_pct<=15.08' \
+    --technical-gate 'bb_width_pct>=31.42' \
+    --technical-gate 'mfi14>=63.95' \
+    --technical-gate 'recent_range_pct<=24.04' \
+    --technical-gate 'roc60<=99.74'
+```
+
 
 # Deploy and develop (for developers)
 

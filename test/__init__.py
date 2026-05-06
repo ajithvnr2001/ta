@@ -1,4 +1,5 @@
 from test.integration.wrapper import TestWrapper
+from test.unit.beast_scanner import BeastScannerTests
 from test.unit.momentum import (
     TestKAMAIndicator,
     TestPercentagePriceOscillator,
@@ -41,6 +42,7 @@ from test.unit.volume import (
 
 __all__ = [
     "TestWrapper",
+    "BeastScannerTests",
     "TestKAMAIndicator",
     "TestPercentagePriceOscillator",
     "TestPercentageVolumeOscillator",

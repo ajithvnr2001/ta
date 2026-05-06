@@ -335,7 +335,8 @@ class TestTSIIndicator(unittest.TestCase):
             self._df[target].tail(),
             result.tail(),
             check_names=False,
-            check_less_precise=True,
+            check_exact=False,
+            rtol=1e-3,
         )
 
     def test_tsi2(self):
@@ -345,7 +346,8 @@ class TestTSIIndicator(unittest.TestCase):
             self._df[target].tail(),
             result.tail(),
             check_names=False,
-            check_less_precise=True,
+            check_exact=False,
+            rtol=1e-3,
         )
 
 
