@@ -109,7 +109,7 @@ https://technical-analysis-library-in-python.readthedocs.io/en/latest/
 # Motivation to use
 
 * [English](https://towardsdatascience.com/technical-analysis-library-to-financial-datasets-with-pandas-python-4b2b390d3543)
-* [Spanish](https://medium.com/datos-y-ciencia/biblioteca-de-an%C3%A1lisis-t%C3%A9cnico-sobre-series-temporales-financieras-para-machine-learning-con-cb28f9427d0)
+* [Spanish](https://medium.com/datos-y-ciencia/biblioteca-de-an%C3%A1lisis-t%C3%A9cnico-sobre-series-temporales-financieras-para-machine-learning-with-cb28f9427d0)
 
 
 # How to use (Python 3)
@@ -186,6 +186,7 @@ df['bb_bbp'] = indicator_bb.bollinger_pband()
 
 For the architecture overview, see [ARCHITECTURE.md](/workspaces/ta/ARCHITECTURE.md).
 For a shorter command reference, see [USAGE.md](/workspaces/ta/USAGE.md).
+For common questions, see [FAQ.md](/workspaces/ta/FAQ.md).
 
 ```python
 from ta import run_beast_scan
