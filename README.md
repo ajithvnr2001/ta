@@ -184,6 +184,8 @@ df['bb_bbp'] = indicator_bb.bollinger_pband()
 
 #### Beast scanner: Yahoo/NSE scan, replay, and accuracy validation
 
+For a shorter command reference, see [USAGE.md](/workspaces/ta/USAGE.md).
+
 ```python
 from ta import run_beast_scan
 
